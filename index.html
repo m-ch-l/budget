@@ -12,7 +12,8 @@
 <title>Budget</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- fonts load without blocking the first paint -->
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root{
   --bg:#f5f2ec; --card:#fffdf9; --ink:#1f1d1a; --muted:#7c766c; --faint:#a9a297; --line:#ebe5da; --soft:#f1ece3;
@@ -375,21 +376,32 @@ function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) { const d = JSON.parse(raw); if (d && d.categories) return d; } } catch (e) {}
   return defaults();
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+let lastRaw = null; // what this tab last wrote/read, to spot changes from other tabs
+function save() { try { lastRaw = JSON.stringify(S); localStorage.setItem(KEY, lastRaw); } catch (e) {} }
 
 let S = load();
-const now = new Date();
-const view = { y: now.getFullYear(), m: now.getMonth(), filter: null };
+try { lastRaw = localStorage.getItem(KEY); } catch (e) {}
+const nowD = () => new Date(); // always fresh, so a tab left open overnight stays correct
+const view = { y: nowD().getFullYear(), m: nowD().getMonth(), filter: null };
 
 const catById = id => S.categories.find(c => c.id === id);
 const fallbackCat = () => S.categories.find(c => /other/i.test(c.name)) || S.categories[S.categories.length - 1];
 const catOf = id => catById(id) || fallbackCat() || { name: 'Uncategorized', emoji: '•', color: '#999', id: '' };
 
+// Formatters are expensive to create, so build each one once and reuse it.
+const nfCache = {};
 function fmt(n, whole) {
+  const k = S.currency + (whole ? 0 : 2);
   try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: S.currency, minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }).format(n);
-  } catch (e) { return (whole ? Math.round(n) : n.toFixed(2)); }
+    const f = nfCache[k] || (nfCache[k] = new Intl.NumberFormat(undefined, { style: 'currency', currency: S.currency, minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }));
+    return f.format(n);
+  } catch (e) { return whole ? String(Math.round(n)) : n.toFixed(2); }
 }
+const DF = {
+  month: new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }),
+  short: new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }),
+  day: new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }),
+};
 const money = n => fmt(n, Math.abs(n) >= 1000 && Math.abs(n % 1) < 0.005);
 
 /* ---------- parsing & categorizing ---------- */
@@ -417,8 +429,14 @@ function merchantKey(desc) {
   const at = d.match(/\b(?:at|from|@)\s+(.+)$/);
   return (at ? at[1] : d).trim();
 }
+const reCache = new Map(); // keyword → compiled pattern, built once
 function wordHit(text, kw) {
-  try { return new RegExp('(^|[^a-z0-9])' + reEsc(kw.toLowerCase()) + '(e?s)?($|[^a-z0-9])', 'i').test(text); } catch (e) { return false; }
+  let re = reCache.get(kw);
+  if (re === undefined) {
+    try { re = new RegExp('(^|[^a-z0-9])' + reEsc(kw.toLowerCase()) + '(e?s)?($|[^a-z0-9])', 'i'); } catch (e) { re = null; }
+    reCache.set(kw, re);
+  }
+  return !!re && re.test(text);
 }
 function guessCat(desc) {
   const d = (desc || '').toLowerCase();
@@ -454,7 +472,7 @@ function occurrences(r, y, m) {
 }
 function nextDue(r) {
   const t = todayISO();
-  let y = now.getFullYear(), m = now.getMonth();
+  let y = nowD().getFullYear(), m = nowD().getMonth();
   for (let i = 0; i < 14; i++) {
     const hit = occurrences(r, y, m).find(d => d >= t);
     if (hit) return hit;
@@ -483,15 +501,16 @@ function monthData(y, m) {
 }
 
 /* ---------- rendering ---------- */
+let optionsHTML = ''; // category <option>s, built once per render and reused by every row
 function render() {
-  const label = new Date(view.y, view.m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  $('#monthLabel').textContent = label;
+  $('#monthLabel').textContent = DF.month.format(new Date(view.y, view.m, 1));
+  optionsHTML = S.categories.map(c => `<option value="${c.id}">${esc(c.emoji)} ${esc(c.name)}</option>`).join('');
   const D = monthData(view.y, view.m);
   renderHero(D); renderCats(D); renderRecurring(); renderActivity(D); renderPreview(); renderBanner();
 }
 
 function monthState() {
-  const cur = now.getFullYear() * 12 + now.getMonth(), v = view.y * 12 + view.m;
+  const n = nowD(), cur = n.getFullYear() * 12 + n.getMonth(), v = view.y * 12 + view.m;
   return v === cur ? 'current' : v < cur ? 'past' : 'future';
 }
 
@@ -505,7 +524,7 @@ function renderHero(D) {
   const pct = D.budget ? Math.round((D.spent + D.upcoming) / D.budget * 100) : 0;
   let stat3 = '';
   if (state === 'current') {
-    const daysLeft = dim(view.y, view.m) - now.getDate() + 1;
+    const daysLeft = dim(view.y, view.m) - nowD().getDate() + 1;
     stat3 = `<div class="stat"><small>Per day · ${daysLeft} day${daysLeft > 1 ? 's' : ''} left</small><strong>${fmt(Math.max(left, 0) / daysLeft)}</strong></div>`;
   } else stat3 = `<div class="stat"><small>Status</small><strong>${state === 'past' ? 'Month closed' : 'Planning ahead'}</strong></div>`;
   $('#hero').innerHTML = `
@@ -573,7 +592,7 @@ function renderRecurring() {
       let when = 'Paused';
       if (r.active !== false && next) {
         const days = Math.round((parseISO(next) - t) / 864e5);
-        when = days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Next ${parseISO(next).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+        when = days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Next ${DF.short.format(parseISO(next))}`;
         if (days <= 3) when += ' <span class="tag soon">soon</span>';
       }
       return `<div class="rec ${r.active === false ? 'paused' : ''}" data-act="edit-rec" data-id="${r.id}">
@@ -588,10 +607,11 @@ function dayLabel(d) {
   const t = todayISO(), y = new Date(); y.setDate(y.getDate() - 1);
   if (d === t) return 'Today';
   if (d === iso(y)) return 'Yesterday';
-  return parseISO(d).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  return DF.day.format(parseISO(d));
 }
 function catOptions(sel) {
-  return S.categories.map(c => `<option value="${c.id}" ${c.id === sel ? 'selected' : ''}>${esc(c.emoji)} ${esc(c.name)}</option>`).join('');
+  if (!optionsHTML) optionsHTML = S.categories.map(c => `<option value="${c.id}">${esc(c.emoji)} ${esc(c.name)}</option>`).join('');
+  return sel ? optionsHTML.replace(`value="${sel}">`, `value="${sel}" selected>`) : optionsHTML;
 }
 
 function renderActivity(D) {
@@ -720,7 +740,7 @@ function openCategory(c) {
     const name = $('#fName').value.trim(); if (!name) return $('#fName').focus();
     const data = { emoji: $('#fEmoji').value.trim() || '•', name, budget: Math.max(0, parseFloat($('#fBudget').value) || 0), color, keywords: $('#fKw').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) };
     if (isNew) S.categories.push({ id: uid(), ...data }); else Object.assign(c, data);
-    save(); closeDialog(); render();
+    optionsHTML = ''; save(); closeDialog(); render();
   };
 }
 
@@ -813,7 +833,10 @@ document.addEventListener('click', e => {
       const i = S.txns.findIndex(x => x.id === id); if (i < 0) break;
       const [tx] = S.txns.splice(i, 1); save(); render();
       toast(`Deleted ${tx.desc || 'spending'} · ${fmt(tx.amount)}`, () => { S.txns.push(tx); save(); render(); });
+      break;
     }
+    case 'backup': backup(); break;
+    case 'snooze-backup': S.backupSnooze = todayISO(); save(); renderBanner(); break;
   }
 });
 document.addEventListener('change', e => {
@@ -951,17 +974,42 @@ function renderBanner() {
     <button class="x" data-act="snooze-backup" aria-label="Remind me later">×</button>
   </div>`;
 }
-document.addEventListener('click', e => {
-  const el = e.target.closest('[data-act]'); if (!el) return;
-  if (el.dataset.act === 'backup') backup();
-  if (el.dataset.act === 'snooze-backup') { S.backupSnooze = todayISO(); save(); renderBanner(); }
-});
 // ask the browser to keep our storage (makes automatic cleanup less likely)
 try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) {}
 
+/* ---------- keep tabs in sync & dates fresh ---------- */
+// Each Apple Pay payment can open a new Safari tab. Without this, an older tab
+// would overwrite the new payment the next time it saved.
+let pendingSync = false, renderedDay = todayISO();
+function syncFromStorage() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) { return; }
+  if (!raw || raw === lastRaw) return;
+  if (dlg.open) { pendingSync = true; return; } // don't yank data out from under an open form
+  try { const d = JSON.parse(raw); if (!d || !d.categories) return; S = d; lastRaw = raw; optionsHTML = ''; render(); } catch (e) {}
+}
+function refreshDay() {
+  const t = todayISO();
+  if (t === renderedDay) return;
+  // if you were looking at "this month" and the month has turned, follow it
+  const old = parseISO(renderedDay);
+  if (view.y === old.getFullYear() && view.m === old.getMonth()) { view.y = nowD().getFullYear(); view.m = nowD().getMonth(); }
+  renderedDay = t;
+  if ($('#qaDate').value === iso(old)) $('#qaDate').value = t;
+  render();
+}
+window.addEventListener('storage', e => { if (e.key === KEY) syncFromStorage(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { syncFromStorage(); refreshDay(); } });
+window.addEventListener('pageshow', e => { if (e.persisted) { syncFromStorage(); refreshDay(); } }); // back/forward cache
+dlg.addEventListener('close', () => { if (pendingSync) { pendingSync = false; syncFromStorage(); } });
+
+/* ---------- offline cache: instant loads, works with no signal ---------- */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
 $('#qaDate').value = todayISO();
 render();
-renderBanner();
 intakeFromURL();
 // on phones, don't pop the keyboard open on load
 if (!matchMedia('(hover:none)').matches) $('#qa').focus();
