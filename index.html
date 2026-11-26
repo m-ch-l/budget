@@ -485,13 +485,27 @@ function wordHit(text, kw) {
   }
   return !!re && re.test(text);
 }
-function guessCat(desc) {
+function guessCat(desc, amount) {
+  return snackRule(guessCatByWords(desc), amount);
+}
+function guessCatByWords(desc) {
   const d = (desc || '').toLowerCase();
   let best = null, len = 0;
   for (const [k, cid] of Object.entries(S.rules)) if (k && d.includes(k) && k.length > len && catById(cid)) { best = cid; len = k.length; }
   if (best) return { id: best, learned: true };
   for (const c of S.categories) for (const k of c.keywords || []) if (k && k.length > len && wordHit(d, k)) { best = c.id; len = k.length; }
   return { id: best || fallbackCat()?.id, learned: false, matched: !!best };
+}
+// Small buys at a gas station are snacks, not fuel: anything that would go to Gas
+// but costs less than the cutoff (Settings, default $20) goes to Snacks instead.
+const snackCutoff = () => (S.snackUnder ?? 20);
+function snackRule(g, amount) {
+  const cut = snackCutoff();
+  if (!(cut > 0) || !(amount > 0) || amount >= cut) return g;
+  const gasCat = catById(g.id);
+  if (!gasCat || !/^(gas|fuel)\b/i.test(gasCat.name)) return g;
+  const snacks = S.categories.find(c => /snack/i.test(c.name));
+  return snacks ? { ...g, id: snacks.id, snack: true } : g;
 }
 function learn(desc, catId) {
   const k = merchantKey(desc);
@@ -697,7 +711,7 @@ function renderActivity(D) {
 const qa = { override: null };
 function currentParse() {
   const p = parseQuick($('#qa').value);
-  const g = guessCat(p.desc);
+  const g = guessCat(p.desc, p.amount);
   return { ...p, date: p.date || $('#qaDate').value || todayISO(), catId: qa.override || g.id, guess: g };
 }
 function renderPreview() {
@@ -707,7 +721,7 @@ function renderPreview() {
   const p = currentParse();
   $('#qaBtn').disabled = !p.amount;
   const c = catOf(p.catId);
-  const why = qa.override ? 'you picked' : p.guess.learned ? 'learned' : p.guess.matched ? 'auto' : 'no match — pick one';
+  const why = qa.override ? 'you picked' : p.guess.snack ? `gas station, under ${fmt(snackCutoff(), true)}` : p.guess.learned ? 'learned' : p.guess.matched ? 'auto' : 'no match — pick one';
   box.innerHTML = p.amount
     ? `<span class="chip amt">${fmt(p.amount)}</span>
        <span class="chip-select"><select id="qaCat" style="background:color-mix(in srgb,${esc(c.color)} 20%,transparent)">${catOptions(c.id)}</select></span>
@@ -848,6 +862,7 @@ function openSettings() {
     <div class="settings-row"><div> Pay auto-add<small>Log every Apple Pay payment automatically.</small></div><button type="button" class="btn ghost" id="fApple">Set up</button></div>
     <div class="settings-row"><div>Back up to iCloud Drive<small>${esc(backupAgeText())}. Tap, then choose “Save to Files”.</small></div><button type="button" class="btn" id="fExport">Back up</button></div>
     <div class="settings-row"><div>Restore from backup<small>Replaces current data.</small></div><button type="button" class="btn ghost" id="fImport">Import</button></div>
+    <div class="settings-row"><div>Gas station snacks<small>Gas station buys under this go to Snacks. 0 turns it off.</small></div><input id="fSnack" type="number" min="0" step="1" inputmode="decimal" value="${snackCutoff()}" style="width:84px;border:1.5px solid var(--line);background:var(--bg);border-radius:12px;padding:9px 10px;text-align:right;outline:none"></div>
     <div class="settings-row"><div>Learned merchants<small>${nRules} remembered ${nRules === 1 ? 'choice' : 'choices'}</small></div><button type="button" class="btn ghost" id="fRules" ${nRules ? '' : 'disabled'}>Forget</button></div>
     <div class="settings-row"><div>Start over<small>Deletes all spending, recurring and categories.</small></div><button type="button" class="btn danger" id="fReset">Reset</button></div>
     <div class="actions"><span class="spacer"></span><button type="submit" class="btn">Done</button></div>`);
@@ -855,6 +870,7 @@ function openSettings() {
   $('#fApple').onclick = openApplePaySetup;
   $('#fExport').onclick = () => { closeDialog(); backup(); };
   $('#fImport').onclick = () => $('#importFile').click();
+  $('#fSnack').onchange = e => { const v = parseFloat(e.target.value); S.snackUnder = isFinite(v) && v >= 0 ? v : 20; e.target.value = S.snackUnder; save(); };
   $('#fRules').onclick = () => { S.rules = {}; save(); closeDialog(); toast('Forgot learned merchants'); };
   $('#fReset').onclick = () => { if (confirm('Delete everything and start fresh? This cannot be undone.')) { S = defaults(); save(); view.filter = null; closeDialog(); render(); toast('Fresh start'); } };
   body.onsubmit = e => { e.preventDefault(); closeDialog(); };
@@ -943,7 +959,7 @@ function intake(qs) {
   S.imported = S.imported || [];
   if (S.imported.includes(ref)) return;
   S.imported = [...S.imported.slice(-199), ref];
-  const tx = { id: uid(), date, amount, desc: merchant, catId: guessCat(merchant).id, created: Date.now(), source: 'applepay', card: p.get('card') || '' };
+  const tx = { id: uid(), date, amount, desc: merchant, catId: guessCat(merchant, amount).id, created: Date.now(), source: 'applepay', card: p.get('card') || '' };
   S.txns.push(tx); save();
   const dd = parseISO(date); view.y = dd.getFullYear(); view.m = dd.getMonth();
   render();
