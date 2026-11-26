@@ -39,8 +39,7 @@ button{cursor:pointer}
 
 /* header */
 header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-.brand{font-family:var(--serif);font-size:26px;font-weight:600;letter-spacing:-.02em;margin-right:auto;display:flex;align-items:center;gap:10px}
-.brand i{width:30px;height:30px;border-radius:10px;background:var(--accent);display:grid;place-items:center;font-style:normal;color:var(--accent-ink);font-size:16px}
+.brand{font-family:var(--serif);font-size:26px;font-weight:600;letter-spacing:-.02em;margin-right:auto}
 .month{display:flex;align-items:center;background:var(--card);border-radius:999px;box-shadow:var(--shadow);padding:4px}
 .month span{min-width:132px;text-align:center;font-weight:600}
 .icon-btn{width:36px;height:36px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;color:var(--muted);transition:.15s}
@@ -159,7 +158,7 @@ dialog::backdrop{background:rgba(20,16,10,.35);backdrop-filter:blur(4px)}
 dialog[open]{animation:pop .2s cubic-bezier(.2,.9,.3,1.2)}
 @keyframes pop{from{transform:translateY(8px) scale(.97);opacity:0}}
 .dlg{padding:24px}
-.dlg h3{font-family:var(--serif);font-weight:600;font-size:24px;margin:0 0 18px;letter-spacing:-.02em}
+.dlg h3{font-family:var(--serif);font-weight:600;font-size:24px;margin:0 0 18px;letter-spacing:-.02em;outline:none}
 .field{margin-bottom:14px}
 .field label{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px}
 .field input,.field select,.field textarea{width:100%;border:1.5px solid var(--line);background:var(--bg);border-radius:12px;padding:11px 12px;outline:none;transition:border-color .15s}
@@ -189,6 +188,11 @@ dialog[open]{animation:pop .2s cubic-bezier(.2,.9,.3,1.2)}
 .banner .x{border:0;background:none;color:var(--muted);width:32px;height:32px;border-radius:9px;font-size:18px}
 @media (max-width:640px){.banner{margin:0 0 22px;flex-wrap:wrap}.banner .msg{flex-basis:calc(100% - 50px)}.banner .btn{flex:1}}
 
+/* segmented control */
+.seg{display:inline-flex;background:var(--soft);border-radius:12px;padding:3px;gap:3px}
+.seg button{border:0;background:transparent;border-radius:9px;padding:8px 18px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
 /* toast */
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:12px 14px 12px 18px;border-radius:16px;display:flex;align-items:center;gap:14px;font-weight:500;opacity:0;pointer-events:none;transition:.25s;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);max-width:calc(100vw - 32px);z-index:10}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -214,13 +218,13 @@ html{-webkit-tap-highlight-color:transparent}
   .hero-bar i.up{opacity:.35}
   .hero-bar.over i{background:var(--danger)}
   .month span{min-width:110px}
-  .brand span{display:none}
 }
 
 /* phones */
 @media (max-width:640px){
   .wrap{padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(150px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
   header{margin-bottom:14px;gap:8px}
+  .brand{font-size:22px}
   .month{padding:2px}
   .month span{min-width:0;padding:0 2px;font-size:14px}
   .icon-btn{width:40px;height:40px;font-size:18px}
@@ -289,7 +293,7 @@ html{-webkit-tap-highlight-color:transparent}
 <body>
 <div class="wrap">
   <header>
-    <div class="brand"><i>◐</i><span>Budget</span></div>
+    <div class="brand">Budget</div>
     <div class="month">
       <button class="icon-btn" data-act="prev" aria-label="Previous month">‹</button>
       <span id="monthLabel"></span>
@@ -350,13 +354,13 @@ const round2 = n => Math.round(n * 100) / 100;
 
 const KEY = 'budget.v1';
 const PALETTE = ['#4fa882', '#e0795b', '#5b8def', '#c7a03c', '#3fa7b5', '#9b6ad6', '#d9628f', '#8a8f3c', '#e39b3a', '#7d8798', '#c25b5b', '#3c8a8f'];
-const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'NZD', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'JPY', 'INR', 'MXN', 'BRL', 'SGD', 'ZAR'];
+const CURRENCIES = ['CAD', 'USD'];
 const FREQ = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' };
 
 function defaults() {
   const c = (name, emoji, color, budget, kw) => ({ id: uid(), name, emoji, color, budget, keywords: kw.split(',').map(s => s.trim()).filter(Boolean) });
   return {
-    v: 1, currency: 'USD', rules: {}, txns: [], recurring: [],
+    v: 1, currency: 'CAD', currencyChosen: false, rules: {}, txns: [], recurring: [],
     categories: [
       c('Groceries', '🛒', '#4fa882', 450, 'grocery,groceries,supermarket,trader joe,whole foods,aldi,lidl,kroger,safeway,costco,walmart,market,produce,milk,eggs,bread'),
       c('Dining out', '🍜', '#e0795b', 250, 'restaurant,lunch,dinner,breakfast,brunch,coffee,cafe,starbucks,pizza,burger,sushi,takeout,doordash,uber eats,ubereats,grubhub,mcdonalds,chipotle,bar,drinks,beer,wine,bakery,deli,taco,ramen,snack'),
@@ -380,6 +384,7 @@ let lastRaw = null; // what this tab last wrote/read, to spot changes from other
 function save() { try { lastRaw = JSON.stringify(S); localStorage.setItem(KEY, lastRaw); } catch (e) {} }
 
 let S = load();
+if (S.currency === 'USD' && !S.currencyChosen) { S.currency = 'CAD'; S.currencyChosen = true; save(); }
 try { lastRaw = localStorage.getItem(KEY); } catch (e) {}
 const nowD = () => new Date(); // always fresh, so a tab left open overnight stays correct
 const view = { y: nowD().getFullYear(), m: nowD().getMonth(), filter: null };
@@ -393,7 +398,7 @@ const nfCache = {};
 function fmt(n, whole) {
   const k = S.currency + (whole ? 0 : 2);
   try {
-    const f = nfCache[k] || (nfCache[k] = new Intl.NumberFormat(undefined, { style: 'currency', currency: S.currency, minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }));
+    const f = nfCache[k] || (nfCache[k] = new Intl.NumberFormat(undefined, { style: 'currency', currency: S.currency, currencyDisplay: 'narrowSymbol', minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 }));
     return f.format(n);
   } catch (e) { return whole ? String(Math.round(n)) : n.toFixed(2); }
 }
@@ -410,7 +415,7 @@ function parseQuick(text) {
   let date = null;
   if (/\byesterday\b/i.test(t)) { const d = new Date(); d.setDate(d.getDate() - 1); date = iso(d); t = t.replace(/\byesterday\b/i, ' '); }
   else if (/\btoday\b/i.test(t)) { date = todayISO(); t = t.replace(/\btoday\b/i, ' '); }
-  const m = t.match(/(?:^|\s)[$€£¥]?\s?(\d[\d,]*(?:\.\d{1,2})?)(?:\s?(?:€|\$|£|usd|eur|gbp|dollars?|bucks))?(?=\s)/i);
+  const m = t.match(/(?:^|\s)[$€£¥]?\s?(\d[\d,]*(?:\.\d{1,2})?)(?:\s?(?:€|\$|£|usd|cad|eur|gbp|dollars?|bucks))?(?=\s)/i);
   if (!m) return { amount: null, desc: clean(t), date };
   let raw = m[1];
   if (raw.includes('.')) raw = raw.replace(/,/g, '');
@@ -699,7 +704,14 @@ function toast(msg, undo) {
 
 /* ---------- dialogs ---------- */
 const dlg = $('#dlg'), body = $('#dlgBody');
-function openDialog(html, onReady) { body.innerHTML = html; dlg.showModal(); onReady && onReady(); }
+const isTouch = matchMedia('(hover:none)').matches;
+function openDialog(html, onReady) {
+  body.innerHTML = html;
+  const h = body.querySelector('h3'); if (h) h.tabIndex = -1;
+  dlg.showModal();
+  if (h) h.focus({ preventScroll: true }); // park focus on the title, not the first control
+  if (onReady && !isTouch) onReady();
+}
 function closeDialog() { dlg.close(); }
 dlg.addEventListener('click', e => { if (e.target === dlg) closeDialog(); });
 
@@ -790,14 +802,14 @@ function openSettings() {
   const nRules = Object.keys(S.rules).length;
   openDialog(`
     <h3>Settings</h3>
-    <div class="field"><label>Currency</label><select id="fCur">${CURRENCIES.map(c => `<option ${c === S.currency ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+    <div class="settings-row" style="border-top:0;padding-top:0"><div>Currency</div><div class="seg" id="fCur">${[...new Set([...CURRENCIES, S.currency])].map(c => `<button type="button" data-cur="${c}" class="${c === S.currency ? 'on' : ''}">${c}</button>`).join('')}</div></div>
     <div class="settings-row"><div> Pay auto-add<small>Log every Apple Pay payment automatically.</small></div><button type="button" class="btn ghost" id="fApple">Set up</button></div>
     <div class="settings-row"><div>Back up to iCloud Drive<small>${esc(backupAgeText())}. Tap, then choose “Save to Files”.</small></div><button type="button" class="btn" id="fExport">Back up</button></div>
     <div class="settings-row"><div>Restore from backup<small>Replaces current data.</small></div><button type="button" class="btn ghost" id="fImport">Import</button></div>
     <div class="settings-row"><div>Learned merchants<small>${nRules} remembered ${nRules === 1 ? 'choice' : 'choices'}</small></div><button type="button" class="btn ghost" id="fRules" ${nRules ? '' : 'disabled'}>Forget</button></div>
     <div class="settings-row"><div>Start over<small>Deletes all spending, recurring and categories.</small></div><button type="button" class="btn danger" id="fReset">Reset</button></div>
     <div class="actions"><span class="spacer"></span><button type="submit" class="btn">Done</button></div>`);
-  $('#fCur').onchange = e => { S.currency = e.target.value; save(); render(); };
+  $('#fCur').onclick = e => { const b = e.target.closest('[data-cur]'); if (!b) return; S.currency = b.dataset.cur; S.currencyChosen = true; save(); render(); $('#fCur').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
   $('#fApple').onclick = openApplePaySetup;
   $('#fExport').onclick = () => { closeDialog(); backup(); };
   $('#fImport').onclick = () => $('#importFile').click();
@@ -1012,7 +1024,7 @@ $('#qaDate').value = todayISO();
 render();
 intakeFromURL();
 // on phones, don't pop the keyboard open on load
-if (!matchMedia('(hover:none)').matches) $('#qa').focus();
+if (!isTouch) $('#qa').focus();
 </script>
 </body>
 </html>
