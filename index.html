@@ -363,22 +363,58 @@ const PALETTE = ['#4fa882', '#e0795b', '#5b8def', '#c7a03c', '#3fa7b5', '#9b6ad6
 const CURRENCIES = ['CAD', 'USD'];
 const FREQ = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' };
 
+const DEFAULTS_VERSION = 2;
 function defaults() {
   const c = (name, emoji, color, budget, kw) => ({ id: uid(), name, emoji, color, budget, keywords: kw.split(',').map(s => s.trim()).filter(Boolean) });
+  const groceries = c('Groceries', '🛒', '#4fa882', 500, 'grocery,groceries,supermarket,loblaws,no frills,superstore,sobeys,safeway,metro,freshco,save on foods,costco,walmart,whole foods,trader joe,farm boy,market,produce,milk,eggs,bread');
+  const eating = c('Eating out', '🍜', '#e0795b', 250, 'restaurant,lunch,dinner,breakfast,brunch,coffee,cafe,starbucks,tim hortons,tims,pizza,burger,sushi,takeout,doordash,uber eats,ubereats,skip the dishes,skipthedishes,mcdonalds,a&w,chipotle,bar,pub,drinks,beer,wine,bakery,deli,taco,ramen,pho');
+  const selfcare = c('Self care', '💆', '#d9628f', 100, 'haircut,barber,salon,nails,manicure,pedicure,spa,massage,facial,skincare,skin care,sephora,shoppers drug mart,shoppers,pharmacy,makeup,cosmetics,shampoo,lotion,gym,yoga,pilates,therapy,vitamins');
+  const snacks = c('Snacks', '🍿', '#e39b3a', 60, 'snack,chips,candy,chocolate,gum,soda,pop,energy drink,ice cream,donut,timbits,cookies,7-eleven,7 eleven,circle k,convenience,vending');
+  const gas = c('Gas', '⛽', '#5b8def', 200, 'gas,fuel,petro canada,petro-canada,esso,shell,husky,chevron,pioneer,ultramar,mobil,costco gas,fill up');
+  const subs = c('Subscriptions', '📺', '#9b6ad6', 80.09, 'netflix,youtube,youtube premium,icloud,apple care,applecare,spotify,disney,crave,prime,amazon prime,patreon,subscription,adobe,chatgpt,claude,audible');
+  const car = c('Car', '🚗', '#3fa7b5', 1317.84, 'parking,impark,green p,car loan,car payment,car insurance,insurance,car wash,oil change,tire,tires,mechanic,toll,registration');
+  const other = c('Other', '✨', '#7d8798', 100, '');
+  const r = (name, amount, cat) => ({ id: uid(), name, amount, freq: 'monthly', catId: cat.id, start: '2026-11-01', active: true });
   return {
-    v: 1, currency: 'CAD', currencyChosen: false, rules: {}, txns: [], recurring: [],
-    categories: [
-      c('Groceries', '🛒', '#4fa882', 450, 'grocery,groceries,supermarket,trader joe,whole foods,aldi,lidl,kroger,safeway,costco,walmart,market,produce,milk,eggs,bread'),
-      c('Dining out', '🍜', '#e0795b', 250, 'restaurant,lunch,dinner,breakfast,brunch,coffee,cafe,starbucks,pizza,burger,sushi,takeout,doordash,uber eats,ubereats,grubhub,mcdonalds,chipotle,bar,drinks,beer,wine,bakery,deli,taco,ramen,snack'),
-      c('Transport', '🚗', '#5b8def', 180, 'gas,fuel,uber,lyft,taxi,train,bus,metro,subway,parking,toll,car wash,transit,scooter,shell,chevron,exxon,oil change'),
-      c('Home', '🏠', '#c7a03c', 1600, 'rent,mortgage,ikea,home depot,lowes,furniture,repair,cleaning,hoa,plumber'),
-      c('Bills', '💡', '#3fa7b5', 220, 'electric,electricity,water bill,internet,wifi,phone,mobile,utility,utilities,insurance,verizon,comcast,t-mobile,at&t'),
-      c('Subscriptions', '📺', '#9b6ad6', 60, 'netflix,spotify,hulu,disney,hbo,icloud,youtube,prime,patreon,subscription,adobe,chatgpt,claude,notion,gym membership,audible'),
-      c('Shopping', '🛍️', '#d9628f', 200, 'amazon,target,clothes,shoes,shirt,jacket,pants,mall,zara,uniqlo,etsy,best buy,gift,electronics'),
-      c('Health', '💊', '#8a8f3c', 100, 'pharmacy,doctor,dentist,medicine,cvs,walgreens,gym,yoga,therapy,vitamins,hospital,clinic,haircut'),
-      c('Fun', '🎉', '#e39b3a', 150, 'movie,cinema,concert,ticket,game,steam,museum,bowling,book,hobby,travel,hotel,airbnb,flight'),
-      c('Other', '✨', '#7d8798', 100, ''),
+    v: 1, defaultsVersion: DEFAULTS_VERSION, currency: 'CAD', currencyChosen: false, rules: {}, txns: [],
+    categories: [groceries, eating, selfcare, snacks, gas, subs, car, other],
+    recurring: [
+      r('YouTube Premium', 25.98, subs),
+      r('iCloud', 14.51, subs),
+      r('AppleCare', 12.49, subs),
+      r('Netflix', 27.11, subs),
+      r('Parking', 100, car),
+      r('Car loan', 950, car),
+      r('Car insurance', 267.84, car),
     ],
+  };
+}
+
+// One-time switch from the original 10 categories to the current defaults.
+// Spending you already entered is re-sorted into the closest new category.
+const OLD_TO_NEW = { 'groceries': 'Groceries', 'dining out': 'Eating out', 'health': 'Self care', 'subscriptions': 'Subscriptions', 'transport': 'Car' };
+function migrateDefaults(old) {
+  const fresh = defaults();
+  const byName = n => fresh.categories.find(c => c.name === n);
+  const other = byName('Other');
+  const oldName = id => (old.categories.find(c => c.id === id)?.name || '').toLowerCase();
+  const S0 = S; S = fresh; // guessCat reads the global state
+  const place = (desc, oldId) => {
+    const g = guessCat(desc || '');
+    if (g.matched) return g.id;
+    return (byName(OLD_TO_NEW[oldName(oldId)]) || other).id;
+  };
+  const txns = (old.txns || []).map(t => ({ ...t, catId: place(t.desc, t.catId) }));
+  // keep any recurring payments you added yourself, unless they duplicate a new default
+  const have = new Set(fresh.recurring.map(x => x.name.toLowerCase()));
+  const extra = (old.recurring || []).filter(x => !have.has(String(x.name).toLowerCase())).map(x => ({ ...x, catId: place(x.name, x.catId) }));
+  // carry over learned merchants where the old category has a new home
+  const rules = {};
+  for (const [k, id] of Object.entries(old.rules || {})) { const n = byName(OLD_TO_NEW[oldName(id)]); if (n) rules[k] = n.id; }
+  S = S0;
+  return {
+    ...old, defaultsVersion: DEFAULTS_VERSION,
+    categories: fresh.categories, recurring: [...fresh.recurring, ...extra], txns, rules,
   };
 }
 
@@ -1025,6 +1061,9 @@ dlg.addEventListener('close', () => { if (pendingSync) { pendingSync = false; sy
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
+
+// switch saved data to the current default categories (runs once)
+if ((S.defaultsVersion || 1) < DEFAULTS_VERSION) { S = migrateDefaults(S); save(); }
 
 $('#qaDate').value = todayISO();
 render();
