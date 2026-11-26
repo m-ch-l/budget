@@ -39,7 +39,14 @@ button{cursor:pointer}
 
 /* header */
 header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-.brand{font-family:var(--serif);font-size:26px;font-weight:600;letter-spacing:-.02em;margin-right:auto}
+.brand{margin-right:auto;display:flex;align-items:flex-end;font-family:var(--serif);font-weight:600;font-style:italic;line-height:1;user-select:none;cursor:default}
+.brand span{display:inline-block;background:linear-gradient(160deg,#7bd3a3 0%,var(--accent) 55%,#c7a03c 100%);-webkit-background-clip:text;background-clip:text;color:transparent;;filter:drop-shadow(0 3px 6px color-mix(in srgb,var(--accent) 30%,transparent));transition:transform .35s cubic-bezier(.3,1.6,.5,1)}
+.brand span:nth-child(1){font-size:28px;transform:rotate(-12deg) translateY(-2px)}
+.brand span:nth-child(2){font-size:42px;margin:0 1px;transform:rotate(4deg)}
+.brand span:nth-child(3){font-size:28px;transform:rotate(14deg) translateY(-4px)}
+.brand:hover span:nth-child(1),.brand:active span:nth-child(1){transform:rotate(-24deg) translateY(-8px)}
+.brand:hover span:nth-child(2),.brand:active span:nth-child(2){transform:rotate(-6deg) translateY(-6px) scale(1.12)}
+.brand:hover span:nth-child(3),.brand:active span:nth-child(3){transform:rotate(26deg) translateY(-10px)}
 .month{display:flex;align-items:center;background:var(--card);border-radius:999px;box-shadow:var(--shadow);padding:4px}
 .month span{min-width:132px;text-align:center;font-weight:600}
 .icon-btn{width:36px;height:36px;border-radius:999px;border:0;background:transparent;display:grid;place-items:center;color:var(--muted);transition:.15s}
@@ -224,7 +231,6 @@ html{-webkit-tap-highlight-color:transparent}
 @media (max-width:640px){
   .wrap{padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(150px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
   header{margin-bottom:14px;gap:8px}
-  .brand{font-size:22px}
   .month{padding:2px}
   .month span{min-width:0;padding:0 2px;font-size:14px}
   .icon-btn{width:40px;height:40px;font-size:18px}
@@ -293,7 +299,7 @@ html{-webkit-tap-highlight-color:transparent}
 <body>
 <div class="wrap">
   <header>
-    <div class="brand">Budget</div>
+    <div class="brand" role="img" aria-label="Budget"><span>$</span><span>$</span><span>$</span></div>
     <div class="month">
       <button class="icon-btn" data-act="prev" aria-label="Previous month">‹</button>
       <span id="monthLabel"></span>
