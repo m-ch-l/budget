@@ -555,7 +555,7 @@ function renderCats(D) {
 function renderRecurring() {
   const box = $('#recurring');
   if (!S.recurring.length) {
-    box.innerHTML = `<div class="card empty"><div class="e">↻</div><b>No recurring payments yet</b>Add rent, Netflix, your gym… they'll count toward your budget automatically each month.<div style="margin-top:14px"><button class="btn" data-act="new-rec">Add a subscription</button></div></div>`;
+    box.innerHTML = `<div class="card empty"><div class="e">↻</div><b>No recurring payments yet</b><div style="margin-top:14px"><button class="btn" data-act="new-rec">Add a subscription</button></div></div>`;
     return;
   }
   const active = S.recurring.filter(r => r.active !== false);
@@ -603,7 +603,7 @@ function renderActivity(D) {
   const total = items.reduce((a, x) => a + x.amount, 0);
   $('#actCount').textContent = items.length ? `${items.length} · ${fmt(total)}` : '';
   if (!items.length) {
-    $('#activity').innerHTML = `<div class="empty"><div class="e">🌱</div><b>${fc ? 'Nothing here yet' : 'A fresh month'}</b>Type something like <i>“32 groceries”</i> above and press Enter.</div>`;
+    $('#activity').innerHTML = `<div class="empty"><div class="e">🌱</div><b>${fc ? 'Nothing here yet' : 'A fresh month'}</b></div>`;
     return;
   }
   let html = '', lastDay = '';
