@@ -1,11 +1,12 @@
 // Offline cache for the budget tracker.
 // Serves the saved copy instantly, then quietly fetches the latest version
 // in the background, so updates show up on the next open.
-const CACHE = 'budget-v1';
+const CACHE = 'budget-v2';
 const CORE = ['./', './index.html'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE)));
+  // cache: 'reload' skips the browser's HTTP cache, so we never store an outdated copy
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(CORE.map(u => new Request(u, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -30,7 +31,8 @@ self.addEventListener('fetch', e => {
     // the page itself is stored under one key, whatever is after the "?"
     const key = req.mode === 'navigate' ? './' : req;
     const hit = await cache.match(key, { ignoreSearch: req.mode === 'navigate' });
-    const update = fetch(req)
+    // our own files: always ask GitHub if there's a newer version (a tiny check when nothing changed)
+    const update = fetch(sameOrigin ? new Request(req, { cache: 'no-cache' }) : req)
       .then(res => { if ((res.ok || res.type === 'opaque') && !res.redirected) cache.put(key, res.clone()); return res; })
       .catch(() => null);
     if (hit) { e.waitUntil(update); return hit; }
